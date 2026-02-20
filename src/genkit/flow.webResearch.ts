@@ -6,7 +6,7 @@ const webResearchInputSchema = z.object({
     prompt: z.string().min(1),
     mode: z.enum(["quick", "deep"]),
     market: z.string().min(1),
-    language: z.string().optional(),
+    language: z.string().optional().nullable(),
     topic: z.enum(["seasonal", "product", "supplier", "general"]).optional(),
 });
 
@@ -28,6 +28,12 @@ export const webResearchFlow = ai.defineFlow(
     },
     async (input: WebResearchInput) => {
         const normalized = stripUndefined(input);
+        // Remove 'language' if it's undefined, otherwise ensure it's a string or null
+        if (normalized.language === undefined) {
+            delete (normalized as any).language;
+        } else if (normalized.language === null) {
+            normalized.language = "";
+        }
         return runResearchPipeline(normalized as WebResearchInput);
     }
 );
