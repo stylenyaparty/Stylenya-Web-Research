@@ -29,6 +29,7 @@ This project implements a web service for conducting research on party decoratio
     OPENAI_API_KEY=your_openai_api_key
     TAVILY_API_KEY=your_tavily_api_key
     PORT=4000 # Optional: specify port
+    HOST=0.0.0.0 # Optional: specify host
     ```
 
 ## Running the Application
