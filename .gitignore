@@ -1,1 +1,4 @@
 node_modules
+
+# Evitar subir archivos de entorno con secretos
+.env
