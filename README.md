@@ -4,7 +4,7 @@ This project implements a web service for conducting research on party decoratio
 
 ## Features
 
-*   **AI-Powered Research:** Leverages OpenAI's models for analyzing and synthesizing research data.
+*   **Genkit Integration:** Leverages Genkit for AI orchestration and access to various AI models.
 *   **Web Scraping:** Utilizes Tavily Search API to gather relevant web data.
 *   **FastAPI Server:** Provides a robust backend using Fastify for handling research requests.
 *   **Zod Validation:** Ensures data integrity for incoming requests.
