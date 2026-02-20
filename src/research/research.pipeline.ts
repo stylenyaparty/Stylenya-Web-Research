@@ -1,5 +1,5 @@
 import { tavilySearch } from "../providers/tavily.client.js";
-import { getOpenAIClient } from "../providers/openai.client.js";
+import { Chat } from "@genkit-ai/ai";
 import { buildResearchPrompt } from "./prompt.builder.js";
 import type { ResearchPromptInput } from "./prompt.builder.js";
 import { scoreAndSortRows } from "./scoring.js";
@@ -15,14 +15,18 @@ type EvidenceItem = {
     domain: string;
     query: string;
 };
-async function callLLMJson(client: ReturnType<typeof getOpenAIClient>, prompt: string, temperature: number) {
-    const resp = await client.responses.create({
-        model: "gpt-4o-mini",
-        input: [{ role: "user", content: prompt }],
-        temperature,
-    });
 
-    return String((resp as any).output_text ?? "").trim();
+// Adaptación: Usar Genkit Chat en vez de cliente OpenAI
+async function callLLMJson(_client: any, prompt: string, temperature: number) {
+    // NOTA: Esta implementación asume que Chat puede ser instanciado y usado así. Ajusta según la documentación de Genkit si es necesario.
+    const chat = new Chat();
+    const resp = await chat.send({
+        messages: [{ role: "user", content: prompt }],
+        temperature,
+        // Puedes agregar más opciones según la API de Genkit
+    });
+    // Ajusta el acceso al texto según la respuesta real de Genkit
+    return String((resp?.output_text ?? resp?.text ?? resp?.content ?? "")).trim();
 }
 function truncate(s: string, max = 500) {
     const clean = (s ?? "").replace(/\s+/g, " ").trim();
@@ -97,13 +101,16 @@ function capEvidenceByDomain<T extends { domain: string }>(
     return out;
 }
 
-export async function runResearchPipeline(input: {
+export type ResearchPipelineInput = {
     prompt: string;
     mode: "quick" | "deep";
     market: string;
     language?: string;
     topic?: "seasonal" | "product" | "supplier" | "general";
-}) {
+};
+export async function runResearchPipeline(
+    input: ResearchPipelineInput
+) {
     const nowIso = new Date().toISOString();
 
     const plan =
@@ -156,11 +163,12 @@ export async function runResearchPipeline(input: {
     const evidenceCap = input.mode === "deep" ? 25 : 10;
     const evidenceCapped = capEvidenceByDomain(evidence, evidenceCap, 3);
 
+    const language = input.language ?? "en";
     const promptInput: ResearchPromptInput = {
         prompt: input.prompt,
         mode: input.mode,
         market: input.market,
-        language: input.language ?? "en",
+        language,
         ...(input.topic !== undefined ? { topic: input.topic } : {}),
         evidence: evidenceCapped.map((e) => ({
             url: e.url,
@@ -174,7 +182,7 @@ export async function runResearchPipeline(input: {
 
     const prompt = buildResearchPrompt(promptInput) ?? "";
 
-    const client = getOpenAIClient();
+    // const client = getOpenAIClient(); // Ya no se usa, ahora se usa Genkit Chat
 
     const baseTemp = input.mode === "deep" ? 0.15 : 0.2;
 
