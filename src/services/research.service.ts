@@ -11,7 +11,7 @@ export async function createResearchRun(input: {
         data: {
             query: input.query,
             mode: input.mode ?? "quick",
-            status: "QUEUED",
+            status: "RUNNING",
             locale: input.locale ?? null,
             geo: input.geo ?? null,
             language: input.language ?? null,
@@ -19,6 +19,16 @@ export async function createResearchRun(input: {
     });
 
     return run;
+}
+
+export async function markRunSuccess(runId: string, timingsMs?: any) {
+    return prisma.webResearchRun.update({
+        where: { id: runId },
+        data: {
+            status: "SUCCESS",
+            timingsMs: timingsMs ?? undefined,
+        },
+    });
 }
 
 export async function getResearchRun(id: string) {
