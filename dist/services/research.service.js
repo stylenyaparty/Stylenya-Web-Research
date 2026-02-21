@@ -1,12 +1,5 @@
 import { prisma } from "../db/prisma.js";
-
-export async function createResearchRun(input: {
-    query: string;
-    mode?: "quick" | "deep";
-    locale?: string;
-    geo?: string;
-    language?: string;
-}) {
+export async function createResearchRun(input) {
     const run = await prisma.webResearchRun.create({
         data: {
             query: input.query,
@@ -17,11 +10,9 @@ export async function createResearchRun(input: {
             language: input.language ?? null,
         },
     });
-
     return run;
 }
-
-export async function getResearchRun(id: string) {
+export async function getResearchRun(id) {
     return prisma.webResearchRun.findUnique({
         where: { id },
         include: {
@@ -30,3 +21,4 @@ export async function getResearchRun(id: string) {
         },
     });
 }
+//# sourceMappingURL=research.service.js.map
