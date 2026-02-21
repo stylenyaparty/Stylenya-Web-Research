@@ -15,11 +15,13 @@
   "type": "module",
   "dependencies": {
     "@genkit-ai/ai": "^1.28.0",
+    "@prisma/client": "^5.22.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.7.4",
     "genkit": "^1.28.0",
     "genkitx-openai": "^0.30.0",
-    "openai": "^6.22.0"
+    "openai": "^6.22.0",
+    "prisma": "^5.22.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
