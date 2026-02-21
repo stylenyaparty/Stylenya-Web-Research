@@ -1,14 +1,14 @@
 # Stylenya-Web-Research
 
-Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avanzadas de términos en Internet, devolviendo un clúster de respuestas útiles para alimentar otros servicios. Utiliza herramientas modernas como Genkit, Tavily, Fastify y TypeScript para ofrecer un backend potente y flexible.
+Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avanzadas de términos en Internet, devolviendo un clúster de respuestas útiles para alimentar otros servicios. Utiliza herramientas modernas como Genkit, Prisma, Fastify y TypeScript para ofrecer un backend potente y flexible.
 
 ## Features
 
 *   **Integración con Genkit:** Orquestación de inteligencia artificial y acceso a diversos modelos de IA.
-*   **Raspado Web:** Utiliza la API de búsqueda Tavily para recopilar datos web relevantes.
+*   **Base de Datos con Prisma:** ORM para interactuar con la base de datos.
 *   **Servidor con Fastify:** Backend robusto para manejar solicitudes de investigación y búsquedas.
-*   **Validación con Zod:** Garantiza la integridad de los datos de entrada.
 *   **Variables de Entorno:** Manejo de claves de API y configuración del servidor a través de archivos `.env`.
+*   **Nuevas Rutas API:** Se han añadido endpoints para la gestión de investigaciones (`/v1/research/*`).
 
 ## Setup
 
@@ -24,12 +24,17 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```
 
 3.  **Configura las variables de entorno:**
-    Crea un archivo `.env` en la raíz del proyecto y añade tus claves de API:
+    Crea un archivo `.env` en la raíz del proyecto y añade tus claves de API y la URL de la base de datos:
     ```
     OPENAI_API_KEY=tu_api_key_openai
-    TAVILY_API_KEY=tu_api_key_tavily
+    DATABASE_URL=postgresql://user:password@host:port/database
     PORT=4000 # Opcional: especificar el puerto
     HOST=0.0.0.0 # Opcional: especificar el host
+    ```
+
+4.  **Ejecuta las migraciones de Prisma:**
+    ```bash
+    npx prisma migrate dev --name init_web_research
     ```
 
 ## Ejecución de la Aplicación
@@ -108,6 +113,45 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
       "rows": []
     }
     ```
+
+*   **`/v1/research/web` (POST):**
+    Inicia una nueva investigación web.
+
+    **Cuerpo de la Solicitud:**
+    ```json
+    {
+      "query": "ejemplo de consulta de investigación",
+      "mode": "deep", // Opcional, por defecto 'quick'
+      "locale": "en-US", // Opcional
+      "geo": "US", // Opcional
+      "language": "en" // Opcional
+    }
+    ```
+
+    **Ejemplo de Solicitud:**
+    ```bash
+    curl -X POST http://localhost:4000/v1/research/web \
+    -H "Content-Type: application/json" \
+    -d '{"query": "ideas para fiestas de cumpleaños temáticas de unicornio", "mode": "deep", "locale": "en-US"}'
+    ```
+
+    **Respuesta:**
+    ```json
+    {
+      "runId": "uuid-del-run",
+      "status": "QUEUED"
+    }
+    ```
+
+*   **`/v1/research/runs/:id` (GET):**
+    Obtiene el estado y los resultados de una tarea de investigación específica.
+
+    **Ejemplo de Solicitud:**
+    ```bash
+    curl http://localhost:4000/v1/research/runs/uuid-del-run
+    ```
+
+    **Respuesta:** Devuelve un objeto detallado con el estado, clústeres y filas de la investigación.
 
 ## Contribuciones
 
