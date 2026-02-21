@@ -1,106 +1,107 @@
 # Stylenya-Web-Research
 
-This project implements a web service for conducting research on party decoration trends using AI and web scraping.
+Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avanzadas de términos en Internet, devolviendo un clúster de respuestas útiles para alimentar otros servicios. Utiliza herramientas modernas como Genkit, Tavily, Fastify y TypeScript para ofrecer un backend potente y flexible.
 
 ## Features
 
-*   **Genkit Integration:** Leverages Genkit for AI orchestration and access to various AI models.
-*   **Web Scraping:** Utilizes Tavily Search API to gather relevant web data.
-*   **FastAPI Server:** Provides a robust backend using Fastify for handling research requests.
-*   **Zod Validation:** Ensures data integrity for incoming requests.
-*   **Environment Variables:** Manages API keys and server configuration through `.env` files.
+*   **Integración con Genkit:** Orquestación de inteligencia artificial y acceso a diversos modelos de IA.
+*   **Raspado Web:** Utiliza la API de búsqueda Tavily para recopilar datos web relevantes.
+*   **Servidor con Fastify:** Backend robusto para manejar solicitudes de investigación y búsquedas.
+*   **Validación con Zod:** Garantiza la integridad de los datos de entrada.
+*   **Variables de Entorno:** Manejo de claves de API y configuración del servidor a través de archivos `.env`.
 
 ## Setup
 
-1.  **Clone the repository:**
+1.  **Clona el repositorio:**
     ```bash
     git clone <repository-url>
     cd stylenya-web-research
     ```
 
-2.  **Install dependencies:**
+2.  **Instala las dependencias:**
     ```bash
     npm install
     ```
 
-3.  **Configure environment variables:**
-    Create a `.env` file in the root of the project and add your API keys:
+3.  **Configura las variables de entorno:**
+    Crea un archivo `.env` en la raíz del proyecto y añade tus claves de API:
     ```
-    OPENAI_API_KEY=your_openai_api_key
-    TAVILY_API_KEY=your_tavily_api_key
-    PORT=4000 # Optional: specify port
+    OPENAI_API_KEY=tu_api_key_openai
+    TAVILY_API_KEY=tu_api_key_tavily
+    PORT=4000 # Opcional: especificar el puerto
+    HOST=0.0.0.0 # Opcional: especificar el host
     ```
 
-## Running the Application
+## Ejecución de la Aplicación
 
-*   **Development Server:**
+*   **Servidor de Desarrollo:**
     ```bash
     npm run dev
     ```
-    This will start the server with hot-reloading enabled.
+    Esto iniciará el servidor con hot-reloading habilitado.
 
-*   **Build for Production:**
+*   **Compilación para Producción:**
     ```bash
     npm run build
     ```
-    This command compiles the TypeScript code into JavaScript.
+    Este comando compila el código TypeScript a JavaScript.
 
-*   **Start Production Server:**
+*   **Servidor de Producción:**
     ```bash
     npm start
     ```
-    This runs the compiled JavaScript code.
+    Esto ejecutará el código JavaScript compilado.
 
 ## API Endpoints
 
 *   **`/health` (GET):**
-    Checks the health status of the server.
+    Verifica el estado de salud del servidor.
     ```bash
     curl http://localhost:4000/health
     ```
-    Expected response: `{"status":"ok"}`
+    Respuesta esperada: `{"status":"ok"}`
 
 *   **`/research/run` (POST):**
-    Initiates a research task.
+    Inicia una tarea de investigación.
 
-    **Request Body:**
+    **Cuerpo de la Solicitud:**
     ```json
     {
-      "prompt": "valentines party trends",
-      "mode": "deep", // or "quick"
+      "prompt": "tendencias para fiestas de San Valentín",
+      "mode": "deep", // o "quick"
       "market": "US",
-      "language": "en", // Optional
-      "topic": "seasonal" // Optional, values: "seasonal", "product", "supplier", "general"
+      "language": "en", // Opcional
+      "topic": "seasonal" // Opcional, valores: "seasonal", "product", "supplier", "general"
     }
     ```
 
-    **Example Request:**
+    **Ejemplo de Solicitud:**
     ```bash
     curl -X POST http://localhost:4000/research/run \
     -H "Content-Type: application/json" \
-    -d '{"prompt":"valentines party trends", "mode":"deep", "market":"US"}'
+    -d '{"prompt":"tendencias para fiestas de San Valentín", "mode":"deep", "market":"US"}'
     ```
 
-    **Example Response:**
+    **Ejemplo de Respuesta:**
     ```json
     {
       "runId": "some-uuid",
       "meta": {
-        "prompt": "valentines party trends",
+        "prompt": "tendencias para fiestas de San Valentín",
         "mode": "deep",
         "market": "US",
         "generatedAt": "2024-07-27T10:00:00.000Z",
         "cache": {"hit": false, "ttlSeconds": 3600},
-        "disclaimer": "Research-based recurrence. Not search volume."
+        "disclaimer": "Resultados basados en investigación. No volumen de búsqueda."
       },
       "rows": [
-        // ... research data rows ...
+        // ... datos de la investigación ...
       ],
       "clusterBundles": [
-        // ... cluster data ...
+        // ... datos de clústeres ...
       ],
       "resultBundle": {
-        "title": "Web Research: valentines party trends",
+        "title": "Investigación Web: tendencias para fiestas de San Valentín",
         "summary": "...",
         "nextSteps": ["..."],
         "sources": [{"url": "...", "title": "..."}]
@@ -108,10 +109,10 @@ This project implements a web service for conducting research on party decoratio
     }
     ```
 
-## Contributing
+## Contribuciones
 
-Contributions are welcome! Please follow the standard Git workflow: fork, branch, commit, and create a pull request.
+¡Las contribuciones son bienvenidas! Por favor, sigue el flujo estándar de Git: fork, crea una rama, realiza un commit y abre un pull request.
 
-## License
+## Licencia
 
-This project is licensed under the ISC License - see the [LICENSE.md](LICENSE.md) file for details.
+Este proyecto está licenciado bajo la licencia ISC. Consulta el archivo [LICENSE.md](LICENSE.md) para más detalles.
