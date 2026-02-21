@@ -1,13 +1,12 @@
 # Stylenya-Web-Research
 
-Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avanzadas de términos en Internet, devolviendo un clúster de respuestas útiles para alimentar otros servicios. Utiliza herramientas modernas como Genkit, Tavily, Fastify y TypeScript para ofrecer un backend potente y flexible.
+Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avanzadas de términos en Internet, devolviendo un clúster de respuestas útiles para alimentar otros servicios. Utiliza herramientas modernas como Genkit, Prisma, Fastify y TypeScript para ofrecer un backend potente y flexible.
 
 ## Features
 
 *   **Integración con Genkit:** Orquestación de inteligencia artificial y acceso a diversos modelos de IA.
-*   **Raspado Web:** Utiliza la API de búsqueda Tavily para recopilar datos web relevantes.
+*   **Base de Datos con Prisma:** ORM para interactuar con la base de datos.
 *   **Servidor con Fastify:** Backend robusto para manejar solicitudes de investigación y búsquedas.
-*   **Validación con Zod:** Garantiza la integridad de los datos de entrada.
 *   **Variables de Entorno:** Manejo de claves de API y configuración del servidor a través de archivos `.env`.
 
 ## Setup
@@ -24,12 +23,17 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```
 
 3.  **Configura las variables de entorno:**
-    Crea un archivo `.env` en la raíz del proyecto y añade tus claves de API:
+    Crea un archivo `.env` en la raíz del proyecto y añade tus claves de API y la URL de la base de datos:
     ```
     OPENAI_API_KEY=tu_api_key_openai
-    TAVILY_API_KEY=tu_api_key_tavily
+    DATABASE_URL=postgresql://user:password@host:port/database
     PORT=4000 # Opcional: especificar el puerto
     HOST=0.0.0.0 # Opcional: especificar el host
+    ```
+
+4.  **Ejecuta las migraciones de Prisma:**
+    ```bash
+    npx prisma migrate dev --name init_web_research
     ```
 
 ## Ejecución de la Aplicación
@@ -69,9 +73,9 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     {
       "prompt": "tendencias para fiestas de San Valentín",
       "mode": "deep", // o "quick"
-      "market": "US",
+      "locale": "US",
       "language": "en", // Opcional
-      "topic": "seasonal" // Opcional, valores: "seasonal", "product", "supplier", "general"
+      "geo": "US" // Opcional
     }
     ```
 
@@ -79,7 +83,7 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```bash
     curl -X POST http://localhost:4000/research/run \
     -H "Content-Type: application/json" \
-    -d '{"prompt":"tendencias para fiestas de San Valentín", "mode":"deep", "market":"US"}'
+    -d '{"prompt":"tendencias para fiestas de San Valentín", "mode":"deep", "locale":"US"}'
     ```
 
     **Ejemplo de Respuesta:**
@@ -89,9 +93,8 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
       "meta": {
         "prompt": "tendencias para fiestas de San Valentín",
         "mode": "deep",
-        "market": "US",
+        "locale": "US",
         "generatedAt": "2024-07-27T10:00:00.000Z",
-        "cache": {"hit": false, "ttlSeconds": 3600},
         "disclaimer": "Resultados basados en investigación. No volumen de búsqueda."
       },
       "rows": [
