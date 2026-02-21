@@ -61,51 +61,51 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```
     Respuesta esperada: `{"status":"ok"}`
 
-*   **`/research/run` (POST):**
-    Inicia una tarea de investigación.
+*   **`/v1/research/web` (POST):**
+    Inicia una tarea de investigación web.
 
     **Cuerpo de la Solicitud:**
     ```json
     {
-      "prompt": "tendencias para fiestas de San Valentín",
-      "mode": "deep", // o "quick"
-      "market": "US",
-      "language": "en", // Opcional
-      "topic": "seasonal" // Opcional, valores: "seasonal", "product", "supplier", "general"
+      "query": "tendencias para fiestas de San Valentín",
+      "mode": "deep" // o "quick"
     }
     ```
 
     **Ejemplo de Solicitud:**
     ```bash
-    curl -X POST http://localhost:4000/research/run \
+    curl -X POST http://localhost:4000/v1/research/web \
     -H "Content-Type: application/json" \
-    -d '{"prompt":"tendencias para fiestas de San Valentín", "mode":"deep", "market":"US"}'
+    -d '{"query":"tendencias para fiestas de San Valentín", "mode":"deep"}'
     ```
 
     **Ejemplo de Respuesta:**
     ```json
     {
       "runId": "some-uuid",
-      "meta": {
-        "prompt": "tendencias para fiestas de San Valentín",
-        "mode": "deep",
-        "market": "US",
-        "generatedAt": "2024-07-27T10:00:00.000Z",
-        "cache": {"hit": false, "ttlSeconds": 3600},
-        "disclaimer": "Resultados basados en investigación. No volumen de búsqueda."
-      },
-      "rows": [
-        // ... datos de la investigación ...
-      ],
-      "clusterBundles": [
-        // ... datos de clústeres ...
-      ],
-      "resultBundle": {
-        "title": "Investigación Web: tendencias para fiestas de San Valentín",
-        "summary": "...",
-        "nextSteps": ["..."],
-        "sources": [{"url": "...", "title": "..."}]
-      }
+      "status": "SUCCESS"
+    }
+    ```
+
+*   **`/v1/research/runs/:id` (GET):**
+    Obtiene los detalles de una tarea de investigación específica.
+
+    **Ejemplo de Solicitud:**
+    ```bash
+    curl http://localhost:4000/v1/research/runs/some-uuid
+    ```
+
+    **Ejemplo de Respuesta:**
+    ```json
+    {
+      "id": "some-uuid",
+      "query": "tendencias para fiestas de San Valentín",
+      "mode": "deep",
+      "status": "SUCCESS",
+      "createdAt": "2024-07-27T10:00:00.000Z",
+      "updatedAt": "2024-07-27T10:05:00.000Z",
+      "clusters": [],
+      "rows": []
     }
     ```
 
