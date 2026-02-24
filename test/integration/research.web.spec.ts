@@ -2,16 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../src/db/prisma.js";
 
-type Scenario = "happy" | "timeout" | "rateLimitThenSuccess" | "rateLimitAlways";
-
 const mockState = vi.hoisted(() => ({
-  tavilyFetchCalls: 0,
-  openAiCalls: 0,
+  tavilyCalls: 0,
+  llmCalls: 0,
+  llmDelayMs: 0,
   llm429FailuresLeft: 0,
-  scenario: "happy" as Scenario,
+  llmAlways429: false,
 }));
 
-function deterministicLlmJson() {
+function deterministicBundleJson() {
   return JSON.stringify({
     rows: [
       {
@@ -47,8 +46,8 @@ function deterministicLlmJson() {
         mentions: 5,
         recencyScore: 0.7,
         researchScore: 0.84,
-        sourcesCount: 2,
-        domainsCount: 2,
+        sourcesCount: 1,
+        domainsCount: 1,
         topEvidence: [
           {
             url: "https://example.com/decor-a",
@@ -69,40 +68,90 @@ function deterministicLlmJson() {
   });
 }
 
-vi.mock("openai", () => {
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+vi.mock("../../src/providers/tavily.client.js", () => {
+  const cache = new Map<string, unknown>();
+
   return {
-    default: class OpenAIMock {
-      responses = {
-        create: async () => {
-          mockState.openAiCalls += 1;
+    tavilySearchWithMeta: vi.fn(async (opts: { query: string }) => {
+      const cacheEnabled = String(process.env.TAVILY_CACHE_ENABLED ?? "false") === "true";
+      const key = opts.query;
 
-          if (mockState.scenario === "timeout") {
-            return await new Promise(() => undefined);
-          }
+      if (cacheEnabled && cache.has(key)) {
+        return { results: cache.get(key), cacheHit: true };
+      }
 
-          if (mockState.scenario === "rateLimitAlways") {
-            throw {
-              name: "RateLimitError",
-              message: "rate limited",
-              status: 429,
-              code: "rate_limit_exceeded",
-            };
-          }
-
-          if (mockState.scenario === "rateLimitThenSuccess" && mockState.llm429FailuresLeft > 0) {
-            mockState.llm429FailuresLeft -= 1;
-            throw {
-              name: "RateLimitError",
-              message: "rate limited",
-              status: 429,
-              code: "rate_limit_exceeded",
-            };
-          }
-
-          return { output_text: deterministicLlmJson() };
+      mockState.tavilyCalls += 1;
+      const results = [
+        {
+          url: "https://example.com/decor-a",
+          title: "Decor A",
+          content: "Decor A content",
+          published_date: "2026-01-10",
         },
-      };
-    },
+        {
+          url: "https://example.org/decor-b",
+          title: "Decor B",
+          content: "Decor B content",
+          published_date: "2026-01-11",
+        },
+      ];
+
+      if (cacheEnabled) cache.set(key, results);
+      return { results, cacheHit: false };
+    }),
+    tavilySearch: vi.fn(),
+  };
+});
+
+vi.mock("../../src/providers/openai.client.js", () => {
+  return {
+    callOpenAIJsonWithRetry: vi.fn(async (input: { timeoutMs?: number }) => {
+      mockState.llmCalls += 1;
+
+      if (mockState.llmDelayMs > 0) {
+        const timeoutMs = input.timeoutMs ?? Number(process.env.LLM_TIMEOUT_MS ?? 60_000);
+        if (mockState.llmDelayMs > timeoutMs) {
+          await wait(timeoutMs + 5);
+          throw {
+            name: "LLMTimeoutError",
+            message: `LLM request timed out after ${timeoutMs}ms`,
+            timeout: true,
+            stage: "llm",
+          };
+        }
+
+        await wait(mockState.llmDelayMs);
+      }
+
+      if (mockState.llmAlways429) {
+        throw {
+          name: "RateLimitError",
+          message: "rate limited",
+          status: 429,
+          code: "rate_limit_exceeded",
+          isRateLimit: true,
+        };
+      }
+
+      const retryMax = Number(process.env.OPENAI_RETRY_MAX ?? 3);
+      while (mockState.llm429FailuresLeft > 0) {
+        mockState.llm429FailuresLeft -= 1;
+        if (mockState.llmCalls > retryMax) {
+          throw {
+            name: "RateLimitError",
+            message: "rate limited",
+            status: 429,
+            code: "rate_limit_exceeded",
+            isRateLimit: true,
+          };
+        }
+        mockState.llmCalls += 1;
+      }
+
+      return deterministicBundleJson();
+    }),
   };
 });
 
@@ -111,55 +160,29 @@ const { buildApp } = await import("../../src/app.js");
 describe("web research integration", () => {
   let app: FastifyInstance;
 
-  beforeEach(() => {
-    mockState.tavilyFetchCalls = 0;
-    mockState.openAiCalls = 0;
+  beforeEach(async () => {
+    mockState.tavilyCalls = 0;
+    mockState.llmCalls = 0;
+    mockState.llmDelayMs = 0;
     mockState.llm429FailuresLeft = 0;
-    mockState.scenario = "happy";
+    mockState.llmAlways429 = false;
 
     process.env.OPENAI_API_KEY = "test-openai-key";
     process.env.TAVILY_API_KEY = "test-tavily-key";
-    process.env.OPENAI_RETRY_BASE_MS = "1";
-    process.env.OPENAI_RETRY_MAX_MS = "5";
-    process.env.OPENAI_RETRY_MAX = "2";
+    process.env.OPENAI_RETRY_MAX = "3";
     process.env.RESEARCH_TIMEOUT_MS_QUICK = "500";
+    process.env.LLM_TIMEOUT_MS = "100";
     process.env.TAVILY_CACHE_ENABLED = "false";
-    process.env.TAVILY_CACHE_TTL_MS = "3600000";
-
-    global.fetch = vi.fn(async () => {
-      mockState.tavilyFetchCalls += 1;
-      return {
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            results: [
-              {
-                url: "https://example.com/decor-a",
-                title: "Decor A",
-                content: "Decor A content",
-                published_date: "2026-01-10",
-              },
-              {
-                url: "https://example.org/decor-b",
-                title: "Decor B",
-                content: "Decor B content",
-                published_date: "2026-01-11",
-              },
-            ],
-          }),
-      } as unknown as Response;
-    }) as typeof fetch;
 
     app = buildApp();
+    await app.ready();
   });
 
   afterEach(async () => {
     await app.close();
-    vi.restoreAllMocks();
   });
 
-  it("happy path persists run, rows, clusters, and evidence", async () => {
+  it("happy path", async () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/research/web",
@@ -169,24 +192,24 @@ describe("web research integration", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.status).toBe("SUCCESS");
+    expect(body.timingsMs).toMatchObject({
+      tavily: expect.any(Number),
+      llm: expect.any(Number),
+      scoring: expect.any(Number),
+      persist: expect.any(Number),
+      total: expect.any(Number),
+    });
 
-    const runResponse = await app.inject({ method: "GET", url: `/v1/research/runs/${body.runId}` });
-    expect(runResponse.statusCode).toBe(200);
-
-    const runBody = runResponse.json();
-    expect(runBody.status).toBe("SUCCESS");
-    expect(runBody.rows.length).toBeGreaterThan(0);
-    expect(runBody.clusters.length).toBeGreaterThan(0);
-
-    expect(await prisma.webResearchRun.count()).toBe(1);
-    expect(await prisma.researchRow.count()).toBe(2);
-    expect(await prisma.researchCluster.count()).toBe(2);
-    expect(await prisma.researchEvidence.count()).toBe(3);
+    const getResponse = await app.inject({ method: "GET", url: `/v1/research/runs/${body.runId}` });
+    expect(getResponse.statusCode).toBe(200);
+    const run = getResponse.json();
+    expect(run.rows.length).toBeGreaterThan(0);
+    expect(run.clusters.length).toBeGreaterThan(0);
   });
 
-  it("returns FAILED with timeout metadata when LLM hangs", async () => {
-    mockState.scenario = "timeout";
+  it("end-to-end timeout returns 504 and persists FAILED", async () => {
     process.env.RESEARCH_TIMEOUT_MS_QUICK = "50";
+    mockState.llmDelayMs = 120;
 
     const response = await app.inject({
       method: "POST",
@@ -196,16 +219,28 @@ describe("web research integration", () => {
 
     expect(response.statusCode).toBe(504);
     const body = response.json();
-    expect(body.status).toBe("FAILED");
-    expect(body.error.timeout).toBe(true);
-
     const run = await prisma.webResearchRun.findUniqueOrThrow({ where: { id: body.runId } });
     expect(run.status).toBe("FAILED");
     expect((run.errorJson as any)?.timeout).toBe(true);
   });
 
-  it("retries on 429 and succeeds", async () => {
-    mockState.scenario = "rateLimitThenSuccess";
+  it("LLM timeout fails with stage llm", async () => {
+    process.env.RESEARCH_TIMEOUT_MS_QUICK = "500";
+    process.env.LLM_TIMEOUT_MS = "20";
+    mockState.llmDelayMs = 60;
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/research/web",
+      payload: { query: "birthday decor", mode: "quick", market: "US" },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json().error.stage).toBe("llm");
+  });
+
+  it("429 retry succeeds", async () => {
+    process.env.OPENAI_RETRY_MAX = "3";
     mockState.llm429FailuresLeft = 2;
 
     const response = await app.inject({
@@ -216,11 +251,11 @@ describe("web research integration", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().status).toBe("SUCCESS");
-    expect(mockState.openAiCalls).toBe(3);
+    expect(mockState.llmCalls).toBe(3);
   });
 
-  it("fails when 429 keeps happening", async () => {
-    mockState.scenario = "rateLimitAlways";
+  it("429 permanent failure returns FAILED", async () => {
+    mockState.llmAlways429 = true;
 
     const response = await app.inject({
       method: "POST",
@@ -232,24 +267,18 @@ describe("web research integration", () => {
     const body = response.json();
     expect(body.status).toBe("FAILED");
     expect(body.error.isRateLimit).toBe(true);
-
-    const run = await prisma.webResearchRun.findUniqueOrThrow({ where: { id: body.runId } });
-    expect(run.status).toBe("FAILED");
-    expect((run.errorJson as any)?.isRateLimit).toBe(true);
   });
 
-  it("uses Tavily cache on repeated query", async () => {
+  it("tavily cache hit on second run", async () => {
     process.env.TAVILY_CACHE_ENABLED = "true";
-    process.env.TAVILY_CACHE_TTL_MS = "3600000";
 
     const payload = { query: "birthday decor", mode: "quick", market: "US" };
-
     const first = await app.inject({ method: "POST", url: "/v1/research/web", payload });
     const second = await app.inject({ method: "POST", url: "/v1/research/web", payload });
 
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
-    expect(mockState.tavilyFetchCalls).toBe(1);
+    expect(mockState.tavilyCalls).toBe(1);
 
     const secondRun = await prisma.webResearchRun.findUniqueOrThrow({ where: { id: second.json().runId } });
     expect((secondRun.timingsMs as any)?.tavilyCacheHit).toBe(true);

@@ -6,5 +6,8 @@ export default defineConfig({
     setupFiles: ["test/setup.ts"],
     include: ["test/**/*.spec.ts"],
     testTimeout: 20_000,
+    maxWorkers: 1,
+    minWorkers: 1,
+    fileParallelism: false,
   },
 });
