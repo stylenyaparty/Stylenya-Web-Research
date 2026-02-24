@@ -9,6 +9,8 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
 *   **Servidor con Fastify:** Backend robusto para manejar solicitudes de investigación y búsquedas.
 *   **Variables de Entorno:** Manejo de claves de API y configuración del servidor a través de archivos `.env`.
 *   **Nuevas Rutas API:** Se han añadido endpoints para la gestión de investigaciones (`/v1/research/*`).
+*   **Caching:** Implementación de caché en memoria para mejorar el rendimiento de las búsquedas de Tavily.
+*   **Reintentos y Timeouts:** Manejo robusto de errores con reintentos para llamadas a la API de OpenAI y timeouts configurables.
 
 ## Setup
 
@@ -30,6 +32,17 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     DATABASE_URL=postgresql://user:password@host:port/database
     PORT=4000 # Opcional: especificar el puerto
     HOST=0.0.0.0 # Opcional: especificar el host
+
+    # Configuración de caché para Tavily
+    TAVILY_CACHE_ENABLED=true # o false
+    TAVILY_CACHE_TTL_MS=21600000 # Tiempo de vida en milisegundos (por defecto 6 horas)
+
+    # Configuración de reintentos y timeouts para OpenAI
+    OPENAI_API_KEY=tu_api_key_openai
+    LLM_TIMEOUT_MS=60000 # Timeout global para LLM en milisegundos
+    OPENAI_RETRY_MAX=3 # Número máximo de reintentos para OpenAI
+    OPENAI_RETRY_BASE_MS=500 # Tiempo base de espera entre reintentos en milisegundos
+    OPENAI_RETRY_MAX_MS=8000 # Tiempo máximo de espera entre reintentos en milisegundos
     ```
 
 4.  **Ejecuta las migraciones de Prisma:**
