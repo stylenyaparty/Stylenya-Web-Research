@@ -9,6 +9,9 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
 *   **Servidor con Fastify:** Backend robusto para manejar solicitudes de investigación y búsquedas.
 *   **Variables de Entorno:** Manejo de claves de API y configuración del servidor a través de archivos `.env`.
 *   **Nuevas Rutas API:** Se han añadido endpoints para la gestión de investigaciones (`/v1/research/*`).
+*   **Parámetros de Investigación Avanzados:** Soporte para `locale`, `geo`, `language`, `market`, y `topic` en las solicitudes de investigación.
+*   **Manejo de Errores Detallado:** Mejora en el reporte de errores durante la ejecución de la pipeline de investigación.
+*   **Registro de Tiempos de Ejecución:** Se registran tiempos de ejecución detallados para la pipeline y sus componentes.
 
 ## Setup
 
@@ -125,6 +128,8 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
       "locale": "en-US", // Opcional
       "geo": "US", // Opcional
       "language": "en" // Opcional
+      "market": "US", // Opcional
+      "topic": "seasonal" // Opcional, puede ser "seasonal", "product", "supplier", "general"
     }
     ```
 
@@ -132,14 +137,22 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```bash
     curl -X POST http://localhost:4000/v1/research/web \
     -H "Content-Type: application/json" \
-    -d '{"query": "ideas para fiestas de cumpleaños temáticas de unicornio", "mode": "deep", "locale": "en-US"}'
+    -d '{"query": "ideas para fiestas de cumpleaños temáticas de unicornio", "mode": "deep", "locale": "en-US", "market": "US", "topic": "seasonal"}'
     ```
 
     **Respuesta:**
     ```json
     {
       "runId": "uuid-del-run",
-      "status": "QUEUED"
+      "status": "RUNNING", // El estado ahora puede ser RUNNING, SUCCESS, o FAILED
+      "timingsMs": { // Tiempos de ejecución detallados en milisegundos
+        "pipeline": 1500,
+        "tavily": 1000,
+        "llm": 400,
+        "scoring": 50,
+        "persist": 100,
+        "total": 1750
+      }
     }
     ```
 
@@ -152,6 +165,33 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```
 
     **Respuesta:** Devuelve un objeto detallado con el estado, clústeres y filas de la investigación.
+    ```json
+    {
+      "id": "uuid-del-run",
+      "query": "ideas para fiestas de cumpleaños temáticas de unicornio",
+      "mode": "deep",
+      "locale": "en-US",
+      "geo": "US",
+      "language": "en",
+      "market": "US",
+      "topic": "seasonal",
+      "status": "SUCCESS",
+      "createdAt": "2024-07-27T10:00:00.000Z",
+      "updatedAt": "2024-07-27T10:05:00.000Z",
+      "timingsMs": {
+        "pipeline": 1500,
+        "tavily": 1000,
+        "llm": 400,
+        "scoring": 50,
+        "persist": 100,
+        "total": 1750
+      },
+      "resultJson": { ... }, // El resultado completo de la pipeline
+      "errorJson": null, // O información del error si el estado es FAILED
+      "clusters": [],
+      "rows": []
+    }
+    ```
 
 ## Contribuciones
 
