@@ -9,6 +9,7 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
 *   **Servidor con Fastify:** Backend robusto para manejar solicitudes de investigación y búsquedas.
 *   **Variables de Entorno:** Manejo de claves de API y configuración del servidor a través de archivos `.env`.
 *   **Nuevas Rutas API:** Se han añadido endpoints para la gestión de investigaciones (`/v1/research/*`).
+*   **Testing con Vitest:** Se ha integrado Vitest para la ejecución de pruebas unitarias y de integración.
 
 ## Setup
 
@@ -24,12 +25,16 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     ```
 
 3.  **Configura las variables de entorno:**
-    Crea un archivo `.env` en la raíz del proyecto y añade tus claves de API y la URL de la base de datos:
-    ```
+    Crea un archivo `.env.test` para la configuración de pruebas y un archivo `.env` en la raíz del proyecto para la configuración general, añadiendo tus claves de API y la URL de la base de datos:
+    ```env
+    # .env
     OPENAI_API_KEY=tu_api_key_openai
     DATABASE_URL=postgresql://user:password@host:port/database
     PORT=4000 # Opcional: especificar el puerto
     HOST=0.0.0.0 # Opcional: especificar el host
+
+    # .env.test
+    DATABASE_URL="postgresql://stylenya:stylenya_dev_password@localhost:5434/stylenya_sid_research_test?schema=public"
     ```
 
 4.  **Ejecuta las migraciones de Prisma:**
@@ -56,6 +61,17 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
     npm start
     ```
     Esto ejecutará el código JavaScript compilado.
+
+*   **Ejecución de Pruebas:**
+    ```bash
+    npm test
+    ```
+    Ejecuta todas las pruebas unitarias y de integración.
+
+    ```bash
+    npm run test:watch
+    ```
+    Ejecuta las pruebas en modo watch.
 
 ## API Endpoints
 
