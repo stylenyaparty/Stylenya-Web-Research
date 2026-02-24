@@ -1,5 +1,5 @@
-import { tavilySearch } from "../providers/tavily.client.js";
-import { getOpenAIClient } from "../providers/openai.client.js";
+import { tavilySearchWithMeta } from "../providers/tavily.client.js";
+import { callOpenAIJsonWithRetry } from "../providers/openai.client.js";
 import { buildResearchPrompt } from "./prompt.builder.js";
 import type { ResearchPromptInput } from "./prompt.builder.js";
 import { scoreAndSortRows } from "./scoring.js";
@@ -192,18 +192,16 @@ function backfillClusterBundlesFromRows(rows: any[], maxClusters: number) {
         }));
 }
 async function callLLMJson(prompt: string, temperature: number) {
-    const client = getOpenAIClient();
-
-    const resp = await client.responses.create({
-        model: "gpt-4o-mini",
-        input: [{ role: "user", content: prompt }],
-        temperature,
-    });
-
-    return String((resp as any).output_text ?? "").trim();
+    return callOpenAIJsonWithRetry({ prompt, temperature });
 }
 
 export async function runResearchPipeline(input: WebResearchInput) {
+    const startedAt = Date.now();
+    const timingsMs: Record<string, number | boolean> = {
+        tavily: 0,
+        llm: 0,
+        scoring: 0,
+    };
     const nowIso = new Date().toISOString();
 
     const plan =
@@ -221,15 +219,24 @@ export async function runResearchPipeline(input: WebResearchInput) {
             ]
             : [`${base} party decorations trends ${input.market}`];
 
-    const allResults = await Promise.all(
+    const tavilyStartedAt = Date.now();
+    const allResultsWithMeta = await Promise.all(
         queries.map((q) =>
-            tavilySearch({
+            tavilySearchWithMeta({
                 query: q,
                 maxResults: plan.maxResultsPerQuery,
                 searchDepth: plan.searchDepth,
+                mode: input.mode,
+                locale: input.market,
+                geo: input.market,
+                ...(input.language ? { language: input.language } : {}),
             })
         )
     );
+    timingsMs.tavily = Date.now() - tavilyStartedAt;
+    timingsMs.tavilyCacheHit = allResultsWithMeta.some((x) => x.cacheHit);
+
+    const allResults = allResultsWithMeta.map((x) => x.results);
 
     const perQueryCounts = allResults.map((arr) => arr?.length ?? 0);
     console.log("[webResearch] queries:", queries.length, perQueryCounts);
@@ -326,7 +333,9 @@ export async function runResearchPipeline(input: WebResearchInput) {
     };
 
     // 1st attempt
+    const llmStartedAt1 = Date.now();
     const raw1 = await callLLMJson(prompt, baseTemp);
+    timingsMs.llm = Number(timingsMs.llm) + (Date.now() - llmStartedAt1);
     const p1 = tryParse(raw1);
 
     if (p1.ok) {
@@ -335,8 +344,10 @@ export async function runResearchPipeline(input: WebResearchInput) {
         // Always harden first (then compute/overwrite)
         hardenResultBundle(json);
 
+        const scoreStartedAt = Date.now();
         json.rows = scoreAndSortRows(json.rows);
         json.rows = addClusterRank(json.rows);
+        timingsMs.scoring = Number(timingsMs.scoring) + (Date.now() - scoreStartedAt);
 
         // Backfill clusters deterministically (deep only) BEFORE deciding expansion
         if (input.mode === "deep") {
@@ -375,7 +386,9 @@ export async function runResearchPipeline(input: WebResearchInput) {
                 "- Keep resultBundle.summary non-empty.\n" +
                 "Return ONLY the full corrected JSON.";
 
+            const llmStartedAtX = Date.now();
             const rawX = await callLLMJson(expandPrompt, 0);
+            timingsMs.llm = Number(timingsMs.llm) + (Date.now() - llmStartedAtX);
             const px = tryParse(rawX);
 
             if (px.ok) {
@@ -383,8 +396,10 @@ export async function runResearchPipeline(input: WebResearchInput) {
 
                 hardenResultBundle(json);
 
+                const scoreStartedAt = Date.now();
                 json.rows = scoreAndSortRows(json.rows);
                 json.rows = addClusterRank(json.rows);
+                timingsMs.scoring = Number(timingsMs.scoring) + (Date.now() - scoreStartedAt);
 
                 // Backfill again if model still underclusters
                 if (input.mode === "deep") {
@@ -404,7 +419,8 @@ export async function runResearchPipeline(input: WebResearchInput) {
         // Final harden (in case buildResultBundle or model output left blanks)
         hardenResultBundle(json);
 
-        return json;
+        timingsMs.total = Date.now() - startedAt;
+        return { ...json, timingsMs };
     }
 
     // Retry 1 vez (repair) — NO Tavily, solo re-formateo
@@ -412,7 +428,9 @@ export async function runResearchPipeline(input: WebResearchInput) {
         prompt +
         "\n\nIMPORTANT: Your previous output was invalid. Return ONLY valid JSON matching the exact schema. Do not include any extra text.";
 
+    const llmStartedAt2 = Date.now();
     const raw2 = await callLLMJson(repairPrompt, 0);
+    timingsMs.llm = Number(timingsMs.llm) + (Date.now() - llmStartedAt2);
     const p2 = tryParse(raw2);
 
     if (p2.ok) {
@@ -420,8 +438,10 @@ export async function runResearchPipeline(input: WebResearchInput) {
 
         hardenResultBundle(json);
 
+        const scoreStartedAt = Date.now();
         json.rows = scoreAndSortRows(json.rows);
         json.rows = addClusterRank(json.rows);
+        timingsMs.scoring = Number(timingsMs.scoring) + (Date.now() - scoreStartedAt);
 
         // Backfill clusters deterministically (deep only) BEFORE deciding expansion
         if (input.mode === "deep") {
@@ -458,7 +478,9 @@ export async function runResearchPipeline(input: WebResearchInput) {
                 "- Keep resultBundle.summary non-empty.\n" +
                 "Return ONLY the full corrected JSON.";
 
+            const llmStartedAtX = Date.now();
             const rawX = await callLLMJson(expandPrompt, 0);
+            timingsMs.llm = Number(timingsMs.llm) + (Date.now() - llmStartedAtX);
             const px = tryParse(rawX);
 
             if (px.ok) {
@@ -466,8 +488,10 @@ export async function runResearchPipeline(input: WebResearchInput) {
 
                 hardenResultBundle(json);
 
+                const scoreStartedAt = Date.now();
                 json.rows = scoreAndSortRows(json.rows);
                 json.rows = addClusterRank(json.rows);
+                timingsMs.scoring = Number(timingsMs.scoring) + (Date.now() - scoreStartedAt);
 
                 if (input.mode === "deep") {
                     const bundlesLen = Array.isArray(json.clusterBundles) ? json.clusterBundles.length : 0;
@@ -485,15 +509,18 @@ export async function runResearchPipeline(input: WebResearchInput) {
 
         hardenResultBundle(json);
 
-        return json;
+        timingsMs.total = Date.now() - startedAt;
+        return { ...json, timingsMs };
     }
 
     console.error("LLM invalid output after retry (first 300 chars):", raw2.slice(0, 300));
 
     // Fallback must satisfy schema expectations; keep resultBundle non-empty
+    timingsMs.total = Date.now() - startedAt;
     return {
         rows: [],
         clusterBundles: [],
+        timingsMs,
         resultBundle: {
             title: `Web Research: ${input.prompt}`,
             summary: "No usable structured output was produced from the provided evidence.",
