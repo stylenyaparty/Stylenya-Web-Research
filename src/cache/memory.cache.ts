@@ -6,6 +6,10 @@ type CacheEntry<T> = {
 export class MemoryCache {
     private readonly store = new Map<string, CacheEntry<unknown>>();
 
+    clear() {
+        this.store.clear();
+    }
+
     get<T>(key: string): T | null {
         const entry = this.store.get(key);
         if (!entry) return null;
