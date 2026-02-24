@@ -11,6 +11,7 @@ Stylenya-Web-Research es un servicio web diseñado para realizar búsquedas avan
 *   **Nuevas Rutas API:** Se han añadido endpoints para la gestión de investigaciones (`/v1/research/*`).
 *   **Caching:** Implementación de caché en memoria para mejorar el rendimiento de las búsquedas de Tavily.
 *   **Reintentos y Timeouts:** Manejo robusto de errores con reintentos para llamadas a la API de OpenAI y timeouts configurables.
+*   **Limpieza de Caché:** La caché en memoria ahora se puede limpiar manualmente.
 
 ## Setup
 
