@@ -70,6 +70,22 @@ function deterministicBundleJson() {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function waitForRun(app: FastifyInstance, runId: string, timeoutMs = 1500) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const response = await app.inject({ method: "GET", url: `/v1/research/runs/${runId}` });
+    if (response.statusCode === 200) {
+      const body = response.json();
+      if (body.status === "SUCCESS" || body.status === "FAILED") {
+        return body;
+      }
+    }
+    await wait(20);
+  }
+
+  throw new Error(`Timed out waiting for run ${runId}`);
+}
+
 vi.mock("../../src/providers/tavily.client.js", () => {
   const cache = new Map<string, unknown>();
 
@@ -173,6 +189,7 @@ describe("web research integration", () => {
     process.env.RESEARCH_TIMEOUT_MS_QUICK = "500";
     process.env.LLM_TIMEOUT_MS = "100";
     process.env.TAVILY_CACHE_ENABLED = "false";
+    process.env.RESEARCH_ASYNC_ENABLED = "true";
 
     app = buildApp();
     await app.ready();
@@ -189,25 +206,23 @@ describe("web research integration", () => {
       payload: { query: "birthday decor", mode: "quick", market: "US" },
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(202);
     const body = response.json();
-    expect(body.status).toBe("SUCCESS");
-    expect(body.timingsMs).toMatchObject({
+
+    const run = await waitForRun(app, body.runId);
+    expect(run.status).toBe("SUCCESS");
+    expect(run.timingsMs).toMatchObject({
       tavily: expect.any(Number),
       llm: expect.any(Number),
       scoring: expect.any(Number),
       persist: expect.any(Number),
       total: expect.any(Number),
     });
-
-    const getResponse = await app.inject({ method: "GET", url: `/v1/research/runs/${body.runId}` });
-    expect(getResponse.statusCode).toBe(200);
-    const run = getResponse.json();
     expect(run.rows.length).toBeGreaterThan(0);
     expect(run.clusters.length).toBeGreaterThan(0);
   });
 
-  it("end-to-end timeout returns 504 and persists FAILED", async () => {
+  it("end-to-end timeout persists FAILED", async () => {
     process.env.RESEARCH_TIMEOUT_MS_QUICK = "50";
     mockState.llmDelayMs = 120;
 
@@ -217,8 +232,10 @@ describe("web research integration", () => {
       payload: { query: "birthday decor", mode: "quick", market: "US" },
     });
 
-    expect(response.statusCode).toBe(504);
+    expect(response.statusCode).toBe(202);
     const body = response.json();
+
+    await waitForRun(app, body.runId);
     const run = await prisma.webResearchRun.findUniqueOrThrow({ where: { id: body.runId } });
     expect(run.status).toBe("FAILED");
     expect((run.errorJson as any)?.timeout).toBe(true);
@@ -234,8 +251,11 @@ describe("web research integration", () => {
       url: "/v1/research/web",
       payload: { query: "birthday decor", mode: "quick", market: "US" },
     });
-      expect(response.statusCode).toBe(504);
-    expect(response.json().error.stage).toBe("llm");
+
+    expect(response.statusCode).toBe(202);
+    const run = await waitForRun(app, response.json().runId);
+    expect(run.status).toBe("FAILED");
+    expect(run.errorJson.stage).toBe("llm");
   });
 
   it("429 retry succeeds", async () => {
@@ -248,8 +268,9 @@ describe("web research integration", () => {
       payload: { query: "birthday decor", mode: "quick", market: "US" },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json().status).toBe("SUCCESS");
+    expect(response.statusCode).toBe(202);
+    const run = await waitForRun(app, response.json().runId);
+    expect(run.status).toBe("SUCCESS");
     expect(mockState.llmCalls).toBe(3);
   });
 
@@ -262,10 +283,10 @@ describe("web research integration", () => {
       payload: { query: "birthday decor", mode: "quick", market: "US" },
     });
 
-    expect(response.statusCode).toBe(500);
-    const body = response.json();
-    expect(body.status).toBe("FAILED");
-    expect(body.error.isRateLimit).toBe(true);
+    expect(response.statusCode).toBe(202);
+    const run = await waitForRun(app, response.json().runId);
+    expect(run.status).toBe("FAILED");
+    expect(run.errorJson.isRateLimit).toBe(true);
   });
 
   it("tavily cache hit on second run", async () => {
@@ -275,11 +296,32 @@ describe("web research integration", () => {
     const first = await app.inject({ method: "POST", url: "/v1/research/web", payload });
     const second = await app.inject({ method: "POST", url: "/v1/research/web", payload });
 
-    expect(first.statusCode).toBe(200);
-    expect(second.statusCode).toBe(200);
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+
+    await waitForRun(app, first.json().runId);
+    await waitForRun(app, second.json().runId);
+
     expect(mockState.tavilyCalls).toBe(1);
 
     const secondRun = await prisma.webResearchRun.findUniqueOrThrow({ where: { id: second.json().runId } });
     expect((secondRun.timingsMs as any)?.tavilyCacheHit).toBe(true);
+  });
+
+  it("lists runs with pagination", async () => {
+    const payload = { query: "birthday decor", mode: "quick", market: "US" };
+    const first = await app.inject({ method: "POST", url: "/v1/research/web", payload });
+    const second = await app.inject({ method: "POST", url: "/v1/research/web", payload: { ...payload, query: "supplier" } });
+
+    await waitForRun(app, first.json().runId);
+    await waitForRun(app, second.json().runId);
+
+    const response = await app.inject({ method: "GET", url: "/v1/research/runs?page=1&pageSize=1" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.page).toBe(1);
+    expect(body.pageSize).toBe(1);
+    expect(body.total).toBeGreaterThanOrEqual(2);
+    expect(body.items.length).toBe(1);
   });
 });
