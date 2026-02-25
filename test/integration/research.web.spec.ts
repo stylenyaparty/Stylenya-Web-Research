@@ -234,8 +234,7 @@ describe("web research integration", () => {
       url: "/v1/research/web",
       payload: { query: "birthday decor", mode: "quick", market: "US" },
     });
-
-    expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(504);
     expect(response.json().error.stage).toBe("llm");
   });
 
